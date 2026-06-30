@@ -18,18 +18,35 @@ async function registerController(req,res ,next){
         {
             return res.status(400).json({error:"This Username is already taken please try something else"})
         }
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
         const newUser = new userModel({
             email,
             username,
-            password,
+            password:hashedPassword,
             profile:{displayName}
         });
         await newUser.save();
         const token = jwt.sign({id:newUser._id} , process.env.JWT_SECRET,{expiresIn:'12h'})
+        const cookieOptions = {
+            httpOnly: true, // Blocks frontend JavaScript from reading the cookie (Stops XSS)
+            secure: process.env.NODE_ENV === "production", // Ensures cookie is only sent over HTTPS in production
+            sameSite: "strict", // Prevents Cross-Site Request Forgery (CSRF) attacks
+            maxAge: 12 * 60 * 60 * 1000 // Cookie lifespan in milliseconds (matches your 12h JWT)
+        };
 
-        res.cookie("token",token);
-        return res.status(201).json({message:"User Account Registered Successfully !!"});
+        res.cookie("token",token,cookieOptions);
+        return res.status(201).json(
+            {message:"User Account Registered Successfully !!",
+                user: {
+                id: newUser._id,
+                username: newUser.username,
+                email: newUser.email,
+                profile: newUser.profile
+            }
+            }
+        );
     }catch(error)
     {
         next(error);
@@ -39,8 +56,43 @@ async function registerController(req,res ,next){
 
 
 
-async function loginController(req,res){
-    const {email , username , password} = req.body; 
+async function loginController(req,res,next){
+    try{
+
+     const { password} = req.body;
+     const user = req.user;
+     if(!password)
+     {
+        return res.status(400).json({error:"password is required !!"})
+     }
+     const checkPassword = await bcrypt.compare(password,user.password);
+     if(!checkPassword)
+     {
+        return res.status(401).json({error:"invalid credentials!!"})
+     }
+     const token = jwt.sign({id: user._id},process.env.JWT_SECRET,{expiresIn:'12h'});
+     const cookieOptions = {
+            httpOnly: true, // Blocks frontend JavaScript from reading the cookie (Stops XSS)
+            secure: process.env.NODE_ENV === "production", // Ensures cookie is only sent over HTTPS in production
+            sameSite: "strict", // Prevents Cross-Site Request Forgery (CSRF) attacks
+            maxAge: 12 * 60 * 60 * 1000 // Cookie lifespan in milliseconds (matches your 12h JWT)
+        };
+     res.cookie("token" ,token , cookieOptions);
+     const userData = user.toObject();
+        delete userData.password;
+
+     return res.status(200).json({
+            message: "Welcome back! Login successful.",
+            user:userData
+            
+        });
+
+
+    }catch(err)
+    {
+        next(err)
+    }
+
 }
 
 

@@ -15,7 +15,7 @@ async function checkUser(req,res,next){
 
         if(!user)
         {
-            return res.status(401).json({error:"Invalid Credentials"});
+            return res.status(401).json({error:"Invalid Credentials "});
 
         }
         req.user = user;
